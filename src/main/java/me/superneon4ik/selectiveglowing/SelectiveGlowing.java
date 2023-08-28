@@ -4,6 +4,7 @@ import static net.minecraft.server.command.CommandManager.*;
 
 import com.mojang.brigadier.Command;
 import com.mojang.logging.LogUtils;
+import me.superneon4ik.selectiveglowing.enums.EntityData;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
@@ -16,6 +17,7 @@ import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.EntityAttributesS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 
@@ -64,12 +66,15 @@ public class SelectiveGlowing implements ModInitializer {
             TrackedData<Byte> flags = (TrackedData<Byte>) field.get(null);
             byte bitmask = target.getDataTracker().get(flags);
 
-            List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
-            list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
-            var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
             for (ServerPlayerEntity player : target.getWorld().getPlayers()) {
+                List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
+
+                if (isGlowing(target.getId(), player)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                else bitmask = EntityData.GLOWING.unsetBit(bitmask);
+
+                list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
+                var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
                 if (player.distanceTo(target) <= 60) {
-                    LOGGER.info("Sending update packet to " + player.getEntityName());
                     player.networkHandler.sendPacket(packet);
                 }
             }
@@ -78,8 +83,19 @@ public class SelectiveGlowing implements ModInitializer {
         }
     }
 
+    public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
+        if (isGlowing(targetId, observer.getId())) return true;
+        var target = getPlayerById(observer.getWorld(), targetId);
+        if (target == null) return false;
+        return target.isGlowing();
+    }
+
     public static boolean isGlowing(int targetId, int observerId) {
         if (!GLOWING_MAP.containsKey(targetId)) return false;
         return GLOWING_MAP.get(targetId).contains(observerId);
+    }
+
+    public static ServerPlayerEntity getPlayerById(ServerWorld world, int id) {
+        return world.getPlayers().stream().filter(p -> p.getId() == id).findFirst().orElse(null);
     }
 }
