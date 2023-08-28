@@ -3,17 +3,27 @@ package me.superneon4ik.selectiveglowing;
 import static net.minecraft.server.command.CommandManager.*;
 
 import com.mojang.brigadier.Command;
+import com.mojang.logging.LogUtils;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.LivingEntity;
+import net.minecraft.entity.attribute.EntityAttributeInstance;
+import net.minecraft.entity.data.DataTracker;
+import net.minecraft.entity.data.TrackedData;
+import net.minecraft.network.packet.Packet;
+import net.minecraft.network.packet.s2c.play.EntityAttributesS2CPacket;
+import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
+import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import org.slf4j.Logger;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.lang.reflect.Field;
+import java.util.*;
 
 public class SelectiveGlowing implements ModInitializer {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
 
     /**
@@ -29,6 +39,7 @@ public class SelectiveGlowing implements ModInitializer {
                                     var target = EntityArgumentType.getPlayer(context, "target");
                                     var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
                                     GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
+                                    updateMetadata(target);
                                     context.getSource().sendFeedback(Text.literal(String.format("Player %s is now glowing for %d players.",
                                             target.getEntityName(), displayPlayers.size())), false);
                                     return Command.SINGLE_SUCCESS;
@@ -37,10 +48,34 @@ public class SelectiveGlowing implements ModInitializer {
                                 .executes(context -> {
                                     var target = EntityArgumentType.getPlayer(context, "target");
                                     GLOWING_MAP.remove(target.getId());
+                                    updateMetadata(target);
                                     context.getSource().sendFeedback(Text.literal("Removed glowing overrides for ")
                                             .append(target.getName()), false);
                                     return Command.SINGLE_SUCCESS;
                                 })))));
+    }
+
+    @SuppressWarnings({"unchecked", "CallToPrintStackTrace"})
+    private static void updateMetadata(ServerPlayerEntity target) {
+        try {
+            var entityClass = Entity.class;
+            var field = entityClass.getDeclaredField("FLAGS");
+            field.setAccessible(true);
+            TrackedData<Byte> flags = (TrackedData<Byte>) field.get(null);
+            byte bitmask = target.getDataTracker().get(flags);
+
+            List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
+            list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
+            var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
+            for (ServerPlayerEntity player : target.getWorld().getPlayers()) {
+                if (player.distanceTo(target) <= 60) {
+                    LOGGER.info("Sending update packet to " + player.getEntityName());
+                    player.networkHandler.sendPacket(packet);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     public static boolean isGlowing(int targetId, int observerId) {
