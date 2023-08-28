@@ -17,10 +17,17 @@ public class SelectiveGlowing implements ModInitializer {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
                 .then(argument("target", EntityArgumentType.player())
-                        .executes(context -> {
-                            var target = EntityArgumentType.getPlayer(context, "target");
-                            context.getSource().sendFeedback(Text.literal("Meow meow " + target.getName()), false);
-                            return Command.SINGLE_SUCCESS;
-                        }))));
+                        .then(argument("displayplayers", EntityArgumentType.players())
+                                .executes(context -> {
+                                    var target = EntityArgumentType.getPlayer(context, "target");
+                                    var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
+                                    context.getSource().sendFeedback(Text.literal("Meow meow"), false);
+                                    return Command.SINGLE_SUCCESS;
+                                }))
+                        .then(literal("*reset")
+                                .executes(context -> {
+                                    var target = EntityArgumentType.getPlayer(context, "target");
+                                    return Command.SINGLE_SUCCESS;
+                                })))));
     }
 }
