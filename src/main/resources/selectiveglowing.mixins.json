@@ -4,7 +4,7 @@
   "package": "me.superneon4ik.selectiveglowing.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
-    "EntityTrackerUpdateS2CPacketMixin"
+    "ServerPlayNetworkHandlerMixin"
   ],
   "client": [
   ],
