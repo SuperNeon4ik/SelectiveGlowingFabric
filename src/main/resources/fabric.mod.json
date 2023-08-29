@@ -15,7 +15,7 @@
   "icon": "assets/selectiveglowing/icon.png",
   "environment": "server",
   "entrypoints": {
-    "main": [
+    "server": [
       "me.superneon4ik.selectiveglowing.SelectiveGlowing"
     ]
   },

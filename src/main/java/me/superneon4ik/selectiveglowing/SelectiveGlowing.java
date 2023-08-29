@@ -3,7 +3,7 @@ package me.superneon4ik.selectiveglowing;
 import com.mojang.brigadier.Command;
 import com.mojang.logging.LogUtils;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
-import net.fabricmc.api.ModInitializer;
+import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
@@ -23,7 +23,7 @@ import java.util.Map;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
-public class SelectiveGlowing implements ModInitializer {
+public class SelectiveGlowing implements DedicatedServerModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
 
@@ -31,7 +31,7 @@ public class SelectiveGlowing implements ModInitializer {
      * Runs the mod initializer.
      */
     @Override
-    public void onInitialize() {
+    public void onInitializeServer() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
                 .then(argument("target", EntityArgumentType.player())
