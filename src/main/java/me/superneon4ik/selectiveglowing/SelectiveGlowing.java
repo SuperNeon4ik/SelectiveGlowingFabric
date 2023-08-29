@@ -9,6 +9,7 @@ import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.data.TrackedDataHandlerRegistry;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -25,6 +26,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public class SelectiveGlowing implements DedicatedServerModInitializer {
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
+    private static final TrackedData<Byte> FLAGS = DataTracker.registerData(Entity.class, TrackedDataHandlerRegistry.BYTE);
 
     /**
      * Runs the mod initializer.
@@ -58,14 +60,9 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                 })))));
     }
 
-    @SuppressWarnings({"unchecked", "CallToPrintStackTrace"})
     private static void updateMetadata(ServerPlayerEntity target) {
         try {
-            var entityClass = Entity.class;
-            var field = entityClass.getDeclaredField("FLAGS");
-            field.setAccessible(true);
-            TrackedData<Byte> flags = (TrackedData<Byte>) field.get(null);
-            byte bitmask = target.getDataTracker().get(flags);
+            byte bitmask = target.getDataTracker().get(FLAGS);
 
             for (ServerPlayerEntity player : target.getWorld().getPlayers()) {
                 List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
@@ -73,7 +70,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                 if (isGlowing(target.getId(), player)) bitmask = EntityData.GLOWING.setBit(bitmask);
                 else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
-                list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
+                list.add(new DataTracker.SerializedEntry<>(0, FLAGS.getType(), bitmask));
                 var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
                 if (player.distanceTo(target) <= 60) {
                     player.networkHandler.sendPacket(packet);
