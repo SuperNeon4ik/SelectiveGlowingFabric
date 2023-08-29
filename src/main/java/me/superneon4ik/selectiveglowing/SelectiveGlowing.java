@@ -24,7 +24,6 @@ import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
 public class SelectiveGlowing implements DedicatedServerModInitializer {
-    private static final Logger LOGGER = LogUtils.getLogger();
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
 
     /**
@@ -34,24 +33,27 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
     public void onInitializeServer() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
-                .then(argument("target", EntityArgumentType.player())
+                .then(argument("targets", EntityArgumentType.players())
                         .then(argument("displayplayers", EntityArgumentType.players())
                                 .executes(context -> {
-                                    var target = EntityArgumentType.getPlayer(context, "target");
+                                    var targets = EntityArgumentType.getPlayers(context, "targets");
                                     var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
-                                    GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
-                                    updateMetadata(target);
-                                    context.getSource().sendFeedback(Text.literal(String.format("Player %s is now glowing for %d players.",
-                                            target.getEntityName(), displayPlayers.size())), false);
+                                    for (ServerPlayerEntity target : targets) {
+                                        GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
+                                        updateMetadata(target);
+                                    }
+                                    context.getSource().sendFeedback(Text.literal(String.format("%d player(s) are now glowing for %d player(s).",
+                                            targets.size(), displayPlayers.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 }))
                         .then(literal("*reset")
                                 .executes(context -> {
-                                    var target = EntityArgumentType.getPlayer(context, "target");
-                                    GLOWING_MAP.remove(target.getId());
-                                    updateMetadata(target);
-                                    context.getSource().sendFeedback(Text.literal("Removed glowing overrides for ")
-                                            .append(target.getName()), false);
+                                    var targets = EntityArgumentType.getPlayers(context, "targets");
+                                    for (ServerPlayerEntity target : targets) {
+                                        GLOWING_MAP.remove(target.getId());
+                                        updateMetadata(target);
+                                    }
+                                    context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for %d player(s).", targets.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 })))));
     }
@@ -85,10 +87,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
         if (isGlowing(targetId, observer.getId())) return true;
         var target = getPlayerById(observer.getWorld(), targetId);
-        if (target == null) {
-            LOGGER.info("No target.");
-            return false;
-        }
+        if (target == null) return false;
         return target.isGlowing();
     }
 

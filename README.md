@@ -4,16 +4,12 @@ Comically simple server mod to apply fake glowing to players.
 ### Usage
 There's only one command, that controls everything.
 ```
-/glow <target: player> <displayplayers: players>
+/glow <targets: players> <displayplayers: players>
 ```
-`target` - player, that is glowing.\
-`displayplayers` - players, that will see the `target` glowing. (command *overrides* old `displayplayers`)
+`targets` - players, that are gonna be glowing.\
+`displayplayers` - players, that will see the `targets` glowing. (command *overrides* old `displayplayers`)
 
-Reset glowing for target with this command.
+Reset glowing for targets with this command.
 ```
-/glow <target: player> *reset
-```
-Or reset all glowing targets with this command.
-```
-/glow *reset
+/glow <targets: players> *reset
 ```
