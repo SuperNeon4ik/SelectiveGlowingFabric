@@ -1,7 +1,5 @@
 package me.superneon4ik.selectiveglowing;
 
-import static net.minecraft.server.command.CommandManager.*;
-
 import com.mojang.brigadier.Command;
 import com.mojang.logging.LogUtils;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
@@ -9,20 +7,21 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.s2c.play.EntityAttributesS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
 import org.slf4j.Logger;
 
-import java.lang.reflect.Field;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static net.minecraft.server.command.CommandManager.argument;
+import static net.minecraft.server.command.CommandManager.literal;
 
 public class SelectiveGlowing implements ModInitializer {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -100,22 +99,6 @@ public class SelectiveGlowing implements ModInitializer {
 
     public static ServerPlayerEntity getPlayerById(ServerWorld world, int id) {
         return world.getPlayers().stream().filter(p -> p.getId() == id).findFirst().orElse(null);
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public static void overridePacket(EntityTrackerUpdateS2CPacket packet, int observerId) {
-        int targetId = packet.id();
-        for (var value : packet.trackedValues()) {
-            if (value.id() == 0) {
-                byte bitmask = (byte) value.value();
-                if (SelectiveGlowing.isGlowing(targetId, observerId)) bitmask = EntityData.GLOWING.setBit(bitmask);
-                else return;
-                var newEntry = new DataTracker.SerializedEntry(0, value.handler(), bitmask);
-                packet.trackedValues().remove(value);
-                packet.trackedValues().add(newEntry);
-                return;
-            }
-        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
