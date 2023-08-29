@@ -86,7 +86,10 @@ public class SelectiveGlowing implements ModInitializer {
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
         if (isGlowing(targetId, observer.getId())) return true;
         var target = getPlayerById(observer.getWorld(), targetId);
-        if (target == null) return false;
+        if (target == null) {
+            LOGGER.info("No target.");
+            return false;
+        }
         return target.isGlowing();
     }
 
@@ -97,5 +100,38 @@ public class SelectiveGlowing implements ModInitializer {
 
     public static ServerPlayerEntity getPlayerById(ServerWorld world, int id) {
         return world.getPlayers().stream().filter(p -> p.getId() == id).findFirst().orElse(null);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static void overridePacket(EntityTrackerUpdateS2CPacket packet, int observerId) {
+        int targetId = packet.id();
+        for (var value : packet.trackedValues()) {
+            if (value.id() == 0) {
+                byte bitmask = (byte) value.value();
+                if (SelectiveGlowing.isGlowing(targetId, observerId)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                else return;
+                var newEntry = new DataTracker.SerializedEntry(0, value.handler(), bitmask);
+                packet.trackedValues().remove(value);
+                packet.trackedValues().add(newEntry);
+                return;
+            }
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static EntityTrackerUpdateS2CPacket cloneAndOverridePacket(EntityTrackerUpdateS2CPacket packet, int observerId) {
+        int targetId = packet.id();
+        var trackedValues = new ArrayList<DataTracker.SerializedEntry<?>>();
+        for (var value : packet.trackedValues()) {
+            if (value.id() == 0) {
+                byte bitmask = (byte) value.value();
+                if (SelectiveGlowing.isGlowing(targetId, observerId)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                var newEntry = new DataTracker.SerializedEntry(0, value.handler(), bitmask);
+                trackedValues.add(newEntry);
+                continue;
+            }
+            trackedValues.add(value);
+        }
+        return new EntityTrackerUpdateS2CPacket(targetId, trackedValues);
     }
 }
