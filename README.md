@@ -1,5 +1,8 @@
-# Selective Glowing (Fabric)
-Comically simple server mod to apply fake glowing to players. 
+<div align="center">
+    <h1>Selective Glowing (Fabric)</h1>
+    <h4>Comically simple server mod to apply fake glowing to players.</h4>
+    <img src="assets/selective-glowing-icon-rounded-x256.png" height="128" alt="Selective Glowing logo">
+</div>
 
 ### Usage
 There's only one command, that controls everything.
