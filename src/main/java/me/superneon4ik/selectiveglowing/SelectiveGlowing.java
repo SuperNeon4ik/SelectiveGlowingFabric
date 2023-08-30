@@ -83,17 +83,22 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static TrackedData<Byte> getByteTrackedData() throws NoSuchFieldException, IllegalAccessException {
-        MappingResolver resolver = FabricLoader.getInstance().getMappingResolver();
+    @SuppressWarnings({"unchecked", "JavaReflectionMemberAccess"})
+    private static TrackedData<Byte> getByteTrackedData() throws IllegalAccessException {
         var entityClass = Entity.class;
-        var field = entityClass.getDeclaredField(resolver.mapFieldName(
-                "intermediary",
-                resolver.unmapClassName("intermediary", Entity.class.getName()),
-                "field_5990", // FLAGS
-                "Lnet/minecraft/network/data/TrackedData<Ljava/lang/Byte;>;"));
-        field.setAccessible(true);
-        return (TrackedData<Byte>) field.get(null);
+        try {
+            var field = entityClass.getDeclaredField("field_5990");
+            field.setAccessible(true);
+            return (TrackedData<Byte>) field.get(null);
+        } catch (NoSuchFieldException e1) {
+            try {
+                var field = entityClass.getDeclaredField("FLAGS");
+                field.setAccessible(true);
+                return (TrackedData<Byte>) field.get(null);
+            } catch (NoSuchFieldException e2) {
+                return null;
+            }
+        }
     }
 
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
