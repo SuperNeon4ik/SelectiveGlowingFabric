@@ -53,7 +53,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                         GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
                                         updateMetadata(target);
                                     }
-                                    context.getSource().sendFeedback(Text.literal(String.format("%d entities are now glowing for %d player(s).",
+                                    context.getSource().sendFeedback(() -> Text.literal(String.format("%d entities are now glowing for %d player(s).",
                                             targets.size(), displayPlayers.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 }))
@@ -64,7 +64,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                         GLOWING_MAP.remove(target.getId());
                                         updateMetadata(target);
                                     }
-                                    context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
+                                    context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 })))
                 .then(literal("*reset")
@@ -79,7 +79,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                     }
                                 }
                             }
-                            context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
+                            context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
                             return Command.SINGLE_SUCCESS;
                         }))));
     }
@@ -131,7 +131,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
 
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
         if (isGlowing(targetId, observer.getId())) return true;
-        var target = getPlayerById(observer.getWorld(), targetId);
+        var target = getPlayerById(observer.getServerWorld(), targetId);
         if (target == null) return false;
         return target.isGlowing();
     }
