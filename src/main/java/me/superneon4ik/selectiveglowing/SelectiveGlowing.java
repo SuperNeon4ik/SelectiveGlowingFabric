@@ -5,6 +5,8 @@ import com.mojang.logging.LogUtils;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.loader.api.FabricLoader;
+import net.fabricmc.loader.api.MappingResolver;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
@@ -58,13 +60,10 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                 })))));
     }
 
-    @SuppressWarnings({"unchecked", "CallToPrintStackTrace"})
+    @SuppressWarnings({"CallToPrintStackTrace"})
     private static void updateMetadata(ServerPlayerEntity target) {
         try {
-            var entityClass = Entity.class;
-            var field = entityClass.getDeclaredField("FLAGS");
-            field.setAccessible(true);
-            TrackedData<Byte> flags = (TrackedData<Byte>) field.get(null);
+            TrackedData<Byte> flags = getByteTrackedData();
             byte bitmask = target.getDataTracker().get(flags);
 
             for (ServerPlayerEntity player : target.getWorld().getPlayers()) {
@@ -82,6 +81,19 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static TrackedData<Byte> getByteTrackedData() throws NoSuchFieldException, IllegalAccessException {
+        MappingResolver resolver = FabricLoader.getInstance().getMappingResolver();
+        var entityClass = Entity.class;
+        var field = entityClass.getDeclaredField(resolver.mapFieldName(
+                "intermediary",
+                resolver.unmapClassName("intermediary", Entity.class.getName()),
+                "field_5990", // FLAGS
+                "Lnet/minecraft/network/data/TrackedData<Ljava/lang/Byte;>;"));
+        field.setAccessible(true);
+        return (TrackedData<Byte>) field.get(null);
     }
 
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
