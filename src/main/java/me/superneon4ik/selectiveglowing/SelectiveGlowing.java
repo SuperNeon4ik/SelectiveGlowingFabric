@@ -28,6 +28,7 @@ import static net.minecraft.server.command.CommandManager.literal;
 
 public class SelectiveGlowing implements DedicatedServerModInitializer {
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
+    private static final TrackedData<Byte> FLAGS = getByteTrackedData();
 
     /**
      * Runs the mod initializer.
@@ -64,8 +65,8 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
     @SuppressWarnings({"CallToPrintStackTrace"})
     private static void updateMetadata(Entity target) {
         try {
-            TrackedData<Byte> flags = getByteTrackedData();
-            byte bitmask = target.getDataTracker().get(flags);
+            if (FLAGS == null) return;
+            byte bitmask = target.getDataTracker().get(FLAGS);
 
             for (PlayerEntity player : target.getWorld().getPlayers()) {
                 if (player instanceof ServerPlayerEntity serverPlayer) {
@@ -74,8 +75,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                     if (isGlowing(target.getId(), serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
                     else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
-                    assert flags != null;
-                    list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
+                    list.add(new DataTracker.SerializedEntry<>(0, FLAGS.getType(), bitmask));
                     var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
                     if (serverPlayer.distanceTo(target) <= 60) {
                         serverPlayer.networkHandler.sendPacket(packet);
@@ -88,7 +88,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
     }
 
     @SuppressWarnings({"unchecked", "JavaReflectionMemberAccess"})
-    private static TrackedData<Byte> getByteTrackedData() throws IllegalAccessException {
+    private static TrackedData<Byte> getByteTrackedData() {
         var entityClass = Entity.class;
         try {
             var field = entityClass.getDeclaredField("field_5990");
@@ -99,9 +99,11 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                 var field = entityClass.getDeclaredField("FLAGS");
                 field.setAccessible(true);
                 return (TrackedData<Byte>) field.get(null);
-            } catch (NoSuchFieldException e2) {
+            } catch (NoSuchFieldException | IllegalAccessException e2) {
                 return null;
             }
+        } catch (IllegalAccessException ignore) {
+            return null;
         }
     }
 
