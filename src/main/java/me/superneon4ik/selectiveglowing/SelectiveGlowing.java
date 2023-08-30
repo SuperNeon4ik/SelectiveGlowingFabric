@@ -11,6 +11,7 @@ import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
+import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
@@ -35,47 +36,50 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
     public void onInitializeServer() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
-                .then(argument("targets", EntityArgumentType.players())
+                .then(argument("targets", EntityArgumentType.entities())
                         .then(argument("displayplayers", EntityArgumentType.players())
                                 .executes(context -> {
-                                    var targets = EntityArgumentType.getPlayers(context, "targets");
+                                    var targets = EntityArgumentType.getEntities(context, "targets");
                                     var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
-                                    for (ServerPlayerEntity target : targets) {
+                                    for (Entity target : targets) {
                                         GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
                                         updateMetadata(target);
                                     }
-                                    context.getSource().sendFeedback(Text.literal(String.format("%d player(s) are now glowing for %d player(s).",
+                                    context.getSource().sendFeedback(Text.literal(String.format("%d entities are now glowing for %d player(s).",
                                             targets.size(), displayPlayers.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 }))
                         .then(literal("*reset")
                                 .executes(context -> {
-                                    var targets = EntityArgumentType.getPlayers(context, "targets");
-                                    for (ServerPlayerEntity target : targets) {
+                                    var targets = EntityArgumentType.getEntities(context, "targets");
+                                    for (Entity target : targets) {
                                         GLOWING_MAP.remove(target.getId());
                                         updateMetadata(target);
                                     }
-                                    context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for %d player(s).", targets.size())), false);
+                                    context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 })))));
     }
 
     @SuppressWarnings({"CallToPrintStackTrace"})
-    private static void updateMetadata(ServerPlayerEntity target) {
+    private static void updateMetadata(Entity target) {
         try {
             TrackedData<Byte> flags = getByteTrackedData();
             byte bitmask = target.getDataTracker().get(flags);
 
-            for (ServerPlayerEntity player : target.getWorld().getPlayers()) {
-                List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
+            for (PlayerEntity player : target.getWorld().getPlayers()) {
+                if (player instanceof ServerPlayerEntity serverPlayer) {
+                    List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
 
-                if (isGlowing(target.getId(), player)) bitmask = EntityData.GLOWING.setBit(bitmask);
-                else bitmask = EntityData.GLOWING.unsetBit(bitmask);
+                    if (isGlowing(target.getId(), serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                    else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
-                list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
-                var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
-                if (player.distanceTo(target) <= 60) {
-                    player.networkHandler.sendPacket(packet);
+                    assert flags != null;
+                    list.add(new DataTracker.SerializedEntry<>(0, flags.getType(), bitmask));
+                    var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
+                    if (serverPlayer.distanceTo(target) <= 60) {
+                        serverPlayer.networkHandler.sendPacket(packet);
+                    }
                 }
             }
         } catch (Exception e) {
