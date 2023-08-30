@@ -13,3 +13,7 @@ Reset glowing for targets with this command.
 ```
 /glow <targets: entities> *reset
 ```
+Or reset all glowing overrides with this command.
+```
+/glow *reset
+```

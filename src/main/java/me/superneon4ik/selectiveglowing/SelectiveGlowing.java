@@ -5,6 +5,7 @@ import com.mojang.logging.LogUtils;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.MappingResolver;
 import net.minecraft.command.argument.EntityArgumentType;
@@ -13,6 +14,7 @@ import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -29,12 +31,17 @@ import static net.minecraft.server.command.CommandManager.literal;
 public class SelectiveGlowing implements DedicatedServerModInitializer {
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
     private static final TrackedData<Byte> FLAGS = getByteTrackedData();
+    private static MinecraftServer minecraftServer = null;
 
     /**
      * Runs the mod initializer.
      */
     @Override
     public void onInitializeServer() {
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            minecraftServer = server;
+        });
+
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
                 .then(argument("targets", EntityArgumentType.entities())
@@ -59,7 +66,22 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                                     }
                                     context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
                                     return Command.SINGLE_SUCCESS;
-                                })))));
+                                })))
+                .then(literal("*reset")
+                        .executes(context -> {
+                            var targetIds = new ArrayList<>(GLOWING_MAP.keySet());
+                            GLOWING_MAP.clear();
+                            if (minecraftServer != null) {
+                                for (ServerWorld world : minecraftServer.getWorlds()) {
+                                    for (Entity entity : world.iterateEntities()) {
+                                        if (!targetIds.contains(entity.getId())) continue;
+                                        updateMetadata(entity);
+                                    }
+                                }
+                            }
+                            context.getSource().sendFeedback(Text.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
+                            return Command.SINGLE_SUCCESS;
+                        }))));
     }
 
     @SuppressWarnings({"CallToPrintStackTrace"})
