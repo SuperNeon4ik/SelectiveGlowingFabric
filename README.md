@@ -4,6 +4,10 @@
     <img src="assets/selective-glowing-icon-rounded-x256.png" height="128" alt="Selective Glowing logo">
 </div>
 
+### What problem does Selective Glowing solve?
+Server owners, who make their own games with command blocks and datapacks on fabric servers, may want to make a mini-game that shows some player glowing for some other specific player.
+You can't make that in vanilla Minecraft. You need a mod or a plugin for your server to modify the packets sent to players. That's what this project is about.
+
 ### Usage
 There's only one command, that controls everything.
 ```
