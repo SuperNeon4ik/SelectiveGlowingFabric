@@ -4,14 +4,13 @@ import me.superneon4ik.selectiveglowing.SelectiveGlowing;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.PacketCallbacks;
 import net.minecraft.network.listener.ClientPlayPacketListener;
-import net.minecraft.network.listener.ServerPlayPacketListener;
-import net.minecraft.network.listener.TickablePacketListener;
+import net.minecraft.network.listener.ServerCommonPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BundleS2CPacket;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
+import net.minecraft.server.network.ServerCommonNetworkHandler;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.EntityTrackingListener;
 import net.minecraft.util.crash.CrashException;
 import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
@@ -25,15 +24,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.ArrayList;
 
-@Mixin(ServerPlayNetworkHandler.class)
-public abstract class ServerPlayNetworkHandlerMixin implements EntityTrackingListener, TickablePacketListener, ServerPlayPacketListener {
-    @Shadow public ServerPlayerEntity player;
+@Mixin(ServerCommonNetworkHandler.class)
+public abstract class ServerCommonNetworkHandlerMixin {
+    @Shadow @Final
+    protected ClientConnection connection;
 
-    @Shadow @Final private ClientConnection connection;
-
-    @Inject(at = @At("HEAD"), method = "sendPacket(Lnet/minecraft/network/packet/Packet;Lnet/minecraft/network/PacketCallbacks;)V", cancellable = true)
+    @Inject(at = @At("HEAD"), method = "send(Lnet/minecraft/network/packet/Packet;Lnet/minecraft/network/PacketCallbacks;)V", cancellable = true)
     private void sendPacket(Packet<?> packet, @Nullable PacketCallbacks callbacks, CallbackInfo callbackInfo) {
-        int observerId = player.getId();
+        int observerId = 0; // i hope it doesn't break lmfao
+        if (((ServerCommonNetworkHandler)(Object)this) instanceof ServerPlayNetworkHandler spnh)
+            observerId = spnh.player.getId();
         if (packet instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
             packet = SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observerId);
         }
