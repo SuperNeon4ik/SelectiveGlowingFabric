@@ -1,13 +1,10 @@
 package me.superneon4ik.selectiveglowing;
 
 import com.mojang.brigadier.Command;
-import com.mojang.logging.LogUtils;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
 import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.loader.api.FabricLoader;
-import net.fabricmc.loader.api.MappingResolver;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
@@ -18,7 +15,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
-import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashMap;
