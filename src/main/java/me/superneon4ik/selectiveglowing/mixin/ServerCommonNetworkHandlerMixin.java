@@ -37,8 +37,8 @@ public abstract class ServerCommonNetworkHandlerMixin {
         }
         else if (packet instanceof BundleS2CPacket bundlePacket) {
             var packets = bundlePacket.getPackets();
-            var newPackets = new ArrayList<Packet<ClientPlayPacketListener>>();
-            for (Packet<ClientPlayPacketListener> oldPacket : packets) {
+            var newPackets = new ArrayList<Packet<? super ClientPlayPacketListener>>();
+            for (Packet<? super ClientPlayPacketListener> oldPacket : packets) {
                 if (oldPacket instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
                     newPackets.add(SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observerId));
                     continue;

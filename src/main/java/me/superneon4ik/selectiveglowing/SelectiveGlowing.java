@@ -93,7 +93,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
                     if (isGlowing(target.getId(), serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
                     else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
-                    list.add(new DataTracker.SerializedEntry<>(0, FLAGS.getType(), bitmask));
+                    list.add(new DataTracker.SerializedEntry<>(0, FLAGS.dataType(), bitmask));
                     var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
                     if (serverPlayer.distanceTo(target) <= 60) {
                         serverPlayer.networkHandler.sendPacket(packet);
