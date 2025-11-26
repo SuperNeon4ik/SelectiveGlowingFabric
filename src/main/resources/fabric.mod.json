@@ -3,19 +3,21 @@
   "id": "selectiveglowing",
   "version": "${version}",
   "name": "SelectiveGlowing",
-  "description": "",
+  "description": "Comically simple server mod to apply fake glowing to players.",
   "authors": [
     "SuperNeon4ik"
   ],
   "contact": {
     "website": "https://superneon4ik.me",
-    "repo": "https://github.com/superneon4ik/SelectiveGlowingFabric"
+    "homepage": "https://modrinth.com/mod/selective-glowing",
+    "sources": "https://github.com/superneon4ik/SelectiveGlowingFabric",
+    "issues": "https://github.com/superneon4ik/SelectiveGlowingFabric/issues"
   },
   "license": "GPL-3.0",
   "icon": "assets/selectiveglowing/icon.png",
-  "environment": "server",
+  "environment": "*",
   "entrypoints": {
-    "server": [
+    "main": [
       "me.superneon4ik.selectiveglowing.SelectiveGlowing"
     ]
   },

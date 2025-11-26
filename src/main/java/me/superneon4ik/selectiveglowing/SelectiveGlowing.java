@@ -3,6 +3,7 @@ package me.superneon4ik.selectiveglowing;
 import com.mojang.brigadier.Command;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
 import net.fabricmc.api.DedicatedServerModInitializer;
+import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.command.argument.EntityArgumentType;
@@ -24,7 +25,7 @@ import java.util.Map;
 import static net.minecraft.server.command.CommandManager.argument;
 import static net.minecraft.server.command.CommandManager.literal;
 
-public class SelectiveGlowing implements DedicatedServerModInitializer {
+public class SelectiveGlowing implements ModInitializer {
     private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
     private static final TrackedData<Byte> FLAGS = getByteTrackedData();
     private static MinecraftServer minecraftServer = null;
@@ -33,7 +34,7 @@ public class SelectiveGlowing implements DedicatedServerModInitializer {
      * Runs the mod initializer.
      */
     @Override
-    public void onInitializeServer() {
+    public void onInitialize() {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             minecraftServer = server;
         });
