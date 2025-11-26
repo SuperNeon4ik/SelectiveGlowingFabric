@@ -6,6 +6,7 @@ import net.fabricmc.api.DedicatedServerModInitializer;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
@@ -16,6 +17,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
+import net.minecraft.util.Formatting;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,17 +32,47 @@ public class SelectiveGlowing implements ModInitializer {
     private static final TrackedData<Byte> FLAGS = getByteTrackedData();
     private static MinecraftServer minecraftServer = null;
 
+    public static final String MOD_ID = "selectiveglowing";
+    public static String VERSION = "unknown";
+
     /**
      * Runs the mod initializer.
      */
     @Override
     public void onInitialize() {
+        VERSION = FabricLoader.getInstance().getModContainer(MOD_ID)
+                .map(c -> c.getMetadata().getVersion().getFriendlyString())
+                .orElse("unknown");
+        
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             minecraftServer = server;
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
                 .requires(source -> source.hasPermissionLevel(4))
+                .executes(context -> {
+                    context.getSource().sendFeedback(() -> 
+                            Text.empty()
+                                    .withColor(0xffadfa)
+                                    .append(
+                                            Text.literal("Selective Glowing ver. %s".formatted(VERSION))
+                                                    .formatted(Formatting.BOLD)
+                                    )
+                                    .append(
+                                            Text.literal("\nUsage:\n")
+                                                    .formatted(Formatting.ITALIC)
+                                    )
+                                    .append(
+                                            Text.literal(
+                                                    "/glow <targets: entities> <displayplayers: players>\n" +
+                                                    "/glow <targets: entities> *reset\n" +
+                                                    "/glow *reset"
+                                            )
+                                    ),
+                            false);  
+                    
+                    return Command.SINGLE_SUCCESS;
+                })
                 .then(argument("targets", EntityArgumentType.entities())
                         .then(argument("displayplayers", EntityArgumentType.players())
                                 .executes(context -> {
