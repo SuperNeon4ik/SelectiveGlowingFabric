@@ -1,8 +1,8 @@
 package me.superneon4ik.selectiveglowing.mixin;
 
+import io.netty.channel.ChannelFutureListener;
 import me.superneon4ik.selectiveglowing.SelectiveGlowing;
 import net.minecraft.network.ClientConnection;
-import net.minecraft.network.PacketCallbacks;
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BundleS2CPacket;
@@ -24,10 +24,10 @@ public abstract class ServerCommonNetworkHandlerMixin {
     @Shadow @Final
     protected ClientConnection connection;
     
-    @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;send(Lnet/minecraft/network/packet/Packet;Lnet/minecraft/network/PacketCallbacks;Z)V"), 
-            method = "send(Lnet/minecraft/network/packet/Packet;Lnet/minecraft/network/PacketCallbacks;)V",
+    @Inject(at = @At(value = "INVOKE", target = "Lnet/minecraft/network/ClientConnection;send(Lnet/minecraft/network/packet/Packet;Lio/netty/channel/ChannelFutureListener;Z)V"), 
+            method = "send",
             cancellable = true)
-    private void sendPacket(Packet<?> packet, @Nullable PacketCallbacks callbacks, CallbackInfo ci) {
+    private void sendPacket(Packet<?> packet, @Nullable ChannelFutureListener channelFutureListener, CallbackInfo ci) {
         if (((ServerCommonNetworkHandler)(Object)this) instanceof ServerPlayNetworkHandler spnh) {
             int observerId = spnh.player.getId(); // i hope it doesn't break lmfao
             if (packet instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
@@ -46,7 +46,7 @@ public abstract class ServerCommonNetworkHandlerMixin {
                 packet = new BundleS2CPacket(newPackets);
             }
 
-            connection.send(packet, callbacks);
+            connection.send(packet, channelFutureListener);
             ci.cancel();
         }
     }

@@ -160,7 +160,7 @@ public class SelectiveGlowing implements ModInitializer {
 
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
         if (isGlowing(targetId, observer.getId())) return true;
-        var target = getPlayerById(observer.getServerWorld(), targetId);
+        var target = getPlayerById(observer.getWorld(), targetId);
         if (target == null) return false;
         return target.isGlowing();
     }
