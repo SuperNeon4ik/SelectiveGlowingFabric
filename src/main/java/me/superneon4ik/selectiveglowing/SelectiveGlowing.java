@@ -119,7 +119,7 @@ public class SelectiveGlowing implements ModInitializer {
             if (FLAGS == null) return;
             byte bitmask = target.getDataTracker().get(FLAGS);
 
-            for (PlayerEntity player : target.getWorld().getPlayers()) {
+            for (PlayerEntity player : target.getEntityWorld().getPlayers()) {
                 if (player instanceof ServerPlayerEntity serverPlayer) {
                     List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
 
@@ -160,7 +160,7 @@ public class SelectiveGlowing implements ModInitializer {
 
     public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
         if (isGlowing(targetId, observer.getId())) return true;
-        var target = getPlayerById(observer.getWorld(), targetId);
+        var target = getPlayerById(observer.getEntityWorld(), targetId);
         if (target == null) return false;
         return target.isGlowing();
     }
