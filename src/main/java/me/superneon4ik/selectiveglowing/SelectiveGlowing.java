@@ -49,7 +49,7 @@ public class SelectiveGlowing implements ModInitializer {
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
-                .requires(source -> source.hasPermissionLevel(4))
+                .requires(source -> source.hasPermissionLevel(2))
                 .executes(context -> {
                     context.getSource().sendFeedback(() -> 
                             Text.empty()
