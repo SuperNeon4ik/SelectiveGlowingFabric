@@ -8,6 +8,9 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.command.argument.EntityArgumentType;
+import net.minecraft.command.permission.Permission;
+import net.minecraft.command.permission.PermissionLevel;
+import net.minecraft.command.permission.PermissionPredicate;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
@@ -49,7 +52,7 @@ public class SelectiveGlowing implements ModInitializer {
         });
 
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
-                .requires(source -> source.hasPermissionLevel(2))
+                .requires(source -> source.getPermissions().hasPermission(new Permission.Level(PermissionLevel.GAMEMASTERS)))
                 .executes(context -> {
                     context.getSource().sendFeedback(() -> 
                             Text.empty()
