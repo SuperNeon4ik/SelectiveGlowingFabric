@@ -5,10 +5,12 @@
 </div>
 
 ### What problem does Selective Glowing solve?
+
 Server owners, who make their own games with command blocks and datapacks on fabric servers, may want to make a mini-game that shows some player glowing for some other specific player.
 You can't make that in vanilla Minecraft. You need a mod or a plugin for your server to modify the packets sent to players. That's what this project is about.
 
 ### Usage
+
 There's only one command, that controls everything.
 ```
 /glow <targets: entities> <displayplayers: players>
@@ -23,4 +25,18 @@ Reset glowing for targets with this command.
 Or reset all glowing overrides with this command.
 ```
 /glow *reset
+```
+
+### Config & saved-state
+
+The config file & saved-state file are stored under `config/selectiveglowing/`.
+In the config file you can choose to disable the saving and/or loading of the saved state.
+
+Here are the default settings:
+
+```json
+{
+  "saveState": true,
+  "loadState": true
+}
 ```
