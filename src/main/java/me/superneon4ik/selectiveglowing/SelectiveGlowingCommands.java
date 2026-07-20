@@ -2,36 +2,36 @@ package me.superneon4ik.selectiveglowing;
 
 import com.mojang.brigadier.Command;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.command.argument.EntityArgumentType;
-import net.minecraft.command.permission.Permission;
-import net.minecraft.command.permission.PermissionLevel;
-import net.minecraft.entity.Entity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.permissions.Permission;
+import net.minecraft.server.permissions.PermissionLevel;
+import net.minecraft.world.entity.Entity;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class SelectiveGlowingCommands {
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
-                .requires(source -> source.getPermissions().hasPermission(new Permission.Level(PermissionLevel.GAMEMASTERS)))
+                .requires(source -> source.permissions().hasPermission(new Permission.HasCommandLevel(PermissionLevel.GAMEMASTERS)))
                 .executes(context -> {
-                    context.getSource().sendFeedback(() ->
-                            Text.empty()
+                    context.getSource().sendSuccess(() ->
+                            Component.empty()
                                     .withColor(0xffadfa)
                                     .append(
-                                            Text.literal("Selective Glowing ver. %s".formatted(SelectiveGlowing.VERSION))
-                                                    .formatted(Formatting.BOLD)
+                                            Component.literal("Selective Glowing ver. %s".formatted(SelectiveGlowing.VERSION))
+                                                    .withStyle(ChatFormatting.BOLD)
                                     )
                                     .append(
-                                            Text.literal("\nUsage:\n")
-                                                    .formatted(Formatting.ITALIC)
+                                            Component.literal("\nUsage:\n")
+                                                    .withStyle(ChatFormatting.ITALIC)
                                     )
                                     .append(
-                                            Text.literal(
+                                            Component.literal(
                                                     "/glow <targets: entities> <displayplayers: players>\n" +
                                                     "/glow <targets: entities> *reset\n" +
                                                     "/glow *reset"
@@ -41,25 +41,25 @@ public class SelectiveGlowingCommands {
 
                     return Command.SINGLE_SUCCESS;
                 })
-                .then(argument("targets", EntityArgumentType.entities())
-                        .then(argument("displayplayers", EntityArgumentType.players())
+                .then(argument("targets", EntityArgument.entities())
+                        .then(argument("displayplayers", EntityArgument.players())
                                 .executes(context -> {
-                                    var targets = EntityArgumentType.getEntities(context, "targets");
-                                    var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
+                                    var targets = EntityArgument.getEntities(context, "targets");
+                                    var displayPlayers = EntityArgument.getPlayers(context, "displayplayers");
                                     for (Entity target : targets) {
                                         SelectiveGlowing.setGlowing(target, displayPlayers);
                                     }
-                                    context.getSource().sendFeedback(() -> Text.literal(String.format("%d entities are now glowing for %d player(s).",
+                                    context.getSource().sendSuccess(() -> Component.literal(String.format("%d entities are now glowing for %d player(s).",
                                             targets.size(), displayPlayers.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 }))
                         .then(literal("*reset")
                                 .executes(context -> {
-                                    var targets = EntityArgumentType.getEntities(context, "targets");
+                                    var targets = EntityArgument.getEntities(context, "targets");
                                     for (Entity target : targets) {
                                         SelectiveGlowing.resetGlowing(target);
                                     }
-                                    context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
+                                    context.getSource().sendSuccess(() -> Component.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
                                     return Command.SINGLE_SUCCESS;
                                 })))
                 .then(literal("*reset")
@@ -67,14 +67,14 @@ public class SelectiveGlowingCommands {
                             var targetIds = SelectiveGlowing.resetAllGlowing();
                             var minecraftServer = SelectiveGlowing.getMinecraftServer();
                             if (minecraftServer != null) {
-                                for (ServerWorld world : minecraftServer.getWorlds()) {
-                                    for (Entity entity : world.iterateEntities()) {
-                                        if (!targetIds.contains(entity.getUuid())) continue;
+                                for (ServerLevel world : minecraftServer.getAllLevels()) {
+                                    for (Entity entity : world.getAllEntities()) {
+                                        if (!targetIds.contains(entity.getUUID())) continue;
                                         SelectiveGlowing.updateMetadata(entity);
                                     }
                                 }
                             }
-                            context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
+                            context.getSource().sendSuccess(() -> Component.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
                             return Command.SINGLE_SUCCESS;
                         }))));
     }

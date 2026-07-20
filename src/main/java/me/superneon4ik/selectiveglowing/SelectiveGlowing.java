@@ -1,26 +1,21 @@
 package me.superneon4ik.selectiveglowing;
 
-import com.google.common.collect.BiMap;
-import com.google.common.collect.HashBiMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.mojang.serialization.JsonOps;
 import me.superneon4ik.selectiveglowing.config.SelectiveGlowingConfig;
 import me.superneon4ik.selectiveglowing.config.SelectiveGlowingState;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents;
+import me.superneon4ik.selectiveglowing.mixin.EntityAccessor;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.data.DataTracker;
-import net.minecraft.entity.data.TrackedData;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
+import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayNetworkHandler;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,9 +26,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public final class SelectiveGlowing {
-    private static final TrackedData<Byte> FLAGS = getByteTrackedData();
+    private static final EntityDataAccessor<Byte> FLAGS = EntityAccessor.getDATA_SHARED_FLAGS_ID();
     private static final int ENTITY_STATE_INDEX = 0;
-    private static final BiMap<UUID, Integer> ENTITY_ID_LOOKUP = HashBiMap.create();
     private static MinecraftServer minecraftServer = null;
 
     public static final String MOD_ID = "selectiveglowing";
@@ -156,17 +150,17 @@ public final class SelectiveGlowing {
         return minecraftServer;
     }
 
-    public static TrackedData<Byte> getFlagsTrackedData() {
+    public static EntityDataAccessor<Byte> getFlagsTrackedData() {
         return FLAGS;
     }
 
-    public static void setGlowing(Entity target, Collection<ServerPlayerEntity> displayPlayers) {
-        state.getState().put(target.getUuid(), displayPlayers.stream().map(Entity::getUuid).collect(Collectors.toSet()));
+    public static void setGlowing(Entity target, Collection<ServerPlayer> displayPlayers) {
+        state.getState().put(target.getUUID(), displayPlayers.stream().map(Entity::getUUID).collect(Collectors.toSet()));
         updateMetadata(target);
     }
 
     public static void resetGlowing(Entity target) {
-        state.getState().remove(target.getUuid());
+        state.getState().remove(target.getUUID());
         updateMetadata(target);
     }
 
@@ -180,19 +174,21 @@ public final class SelectiveGlowing {
     public static void updateMetadata(Entity target) {
         try {
             if (FLAGS == null) return;
-            byte bitmask = target.getDataTracker().get(FLAGS);
+            byte bitmask = target.getEntityData().get(FLAGS);
 
-            for (PlayerEntity player : target.getEntityWorld().getPlayers()) {
-                if (player instanceof ServerPlayerEntity serverPlayer) {
-                    List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
+            try (var level = target.level()) {
+                for (Player player : level.players()) {
+                    if (player instanceof ServerPlayer serverPlayer) {
+                        List<SynchedEntityData.DataValue<?>> list = new ArrayList<>();
 
-                    if (isGlowing(target, serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
-                    else bitmask = EntityData.GLOWING.unsetBit(bitmask);
+                        if (isGlowing(target, serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                        else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
-                    list.add(new DataTracker.SerializedEntry<>(0, FLAGS.dataType(), bitmask));
-                    var packet = new EntityTrackerUpdateS2CPacket(target.getId(), list);
-                    if (serverPlayer.distanceTo(target) <= 60) {
-                        serverPlayer.networkHandler.sendPacket(packet);
+                        list.add(new SynchedEntityData.DataValue<>(0, FLAGS.serializer(), bitmask));
+                        var packet = new ClientboundSetEntityDataPacket(target.getId(), list);
+                        if (serverPlayer.distanceTo(target) <= 60) {
+                            serverPlayer.connection.send(packet);
+                        }
                     }
                 }
             }
@@ -201,54 +197,51 @@ public final class SelectiveGlowing {
         }
     }
 
-    @SuppressWarnings({"unchecked", "JavaReflectionMemberAccess"})
-    private static TrackedData<Byte> getByteTrackedData() {
+    @SuppressWarnings({"unchecked"})
+    private static EntityDataAccessor<Byte> getByteTrackedData() {
         var entityClass = Entity.class;
         try {
-            var field = entityClass.getDeclaredField("field_5990");
+            var field = entityClass.getDeclaredField("DATA_SHARED_FLAGS_ID");
             field.setAccessible(true);
-            return (TrackedData<Byte>) field.get(null);
-        } catch (NoSuchFieldException e1) {
-            try {
-                var field = entityClass.getDeclaredField("FLAGS");
-                field.setAccessible(true);
-                return (TrackedData<Byte>) field.get(null);
-            } catch (NoSuchFieldException | IllegalAccessException e2) {
-                return null;
-            }
-        } catch (IllegalAccessException ignore) {
+            return (EntityDataAccessor<Byte>) field.get(null);
+        } catch (IllegalAccessException | NoSuchFieldException ignore) {
             return null;
         }
     }
 
     public static boolean isGlowing(int targetId, Entity observer) {
-        var target = observer.getEntityWorld().getEntityById(targetId);
-        if (target == null) return false;
+        try (var level = observer.level()) {
+            var target = level.getEntity(targetId);
+            if (target == null) return false;
 
-        return isGlowing(target, observer);
+            return isGlowing(target, observer);
+        } catch (Exception e) {
+            LOGGER.error("Failed to check for glowing: {}", e.toString());
+            return false;
+        }
     }
 
     public static boolean isGlowing(Entity target, Entity observer) {
-        if (!state.getState().containsKey(target.getUuid())) return false;
-        return state.getState().get(target.getUuid()).contains(observer.getUuid());
+        if (!state.getState().containsKey(target.getUUID())) return false;
+        return state.getState().get(target.getUUID()).contains(observer.getUUID());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public static EntityTrackerUpdateS2CPacket cloneAndOverridePacket(EntityTrackerUpdateS2CPacket packet, ServerPlayerEntity observer) {
+    public static ClientboundSetEntityDataPacket cloneAndOverridePacket(ClientboundSetEntityDataPacket packet, ServerPlayer observer) {
         int targetId = packet.id();
-        var trackedValues = new ArrayList<DataTracker.SerializedEntry<?>>();
-        for (var value : packet.trackedValues()) {
+        var trackedValues = new ArrayList<SynchedEntityData.DataValue<?>>();
+        for (var value : packet.packedItems()) {
             if (value.id() == ENTITY_STATE_INDEX) {
                 byte bitmask = (byte) value.value();
                 if (SelectiveGlowing.isGlowing(targetId, observer)) {
                     bitmask = EntityData.GLOWING.setBit(bitmask);
                 }
-                var newEntry = new DataTracker.SerializedEntry(ENTITY_STATE_INDEX, value.handler(), bitmask);
+                var newEntry = new SynchedEntityData.DataValue(ENTITY_STATE_INDEX, value.serializer(), bitmask);
                 trackedValues.add(newEntry);
                 continue;
             }
             trackedValues.add(value);
         }
-        return new EntityTrackerUpdateS2CPacket(targetId, trackedValues);
+        return new ClientboundSetEntityDataPacket(targetId, trackedValues);
     }
 }

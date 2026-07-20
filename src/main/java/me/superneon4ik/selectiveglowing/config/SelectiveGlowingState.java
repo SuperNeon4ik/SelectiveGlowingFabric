@@ -1,7 +1,7 @@
 package me.superneon4ik.selectiveglowing.config;
 
 import com.mojang.serialization.Codec;
-import net.minecraft.util.Uuids;
+import net.minecraft.core.UUIDUtil;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -9,7 +9,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public class SelectiveGlowingState {
-    public static final Codec<SelectiveGlowingState> CODEC = Codec.unboundedMap(Uuids.CODEC, Uuids.SET_CODEC).xmap(
+    public static final Codec<SelectiveGlowingState> CODEC = Codec.unboundedMap(UUIDUtil.AUTHLIB_CODEC, UUIDUtil.CODEC_SET).xmap(
             SelectiveGlowingState::new,
             SelectiveGlowingState::getState
     );
