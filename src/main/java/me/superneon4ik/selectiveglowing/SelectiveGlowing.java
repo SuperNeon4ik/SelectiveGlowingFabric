@@ -1,13 +1,13 @@
 package me.superneon4ik.selectiveglowing;
 
-import com.mojang.brigadier.Command;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.mojang.serialization.JsonOps;
+import me.superneon4ik.selectiveglowing.config.SelectiveGlowingConfig;
+import me.superneon4ik.selectiveglowing.config.SelectiveGlowingState;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
-import net.fabricmc.api.DedicatedServerModInitializer;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.loader.api.FabricLoader;
-import net.minecraft.command.argument.EntityArgumentType;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.entity.data.TrackedData;
@@ -15,106 +15,162 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.network.packet.s2c.play.EntityTrackerUpdateS2CPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.*;
+import java.util.stream.Collectors;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
-
-public class SelectiveGlowing implements ModInitializer {
-    private static final Map<Integer, List<Integer>> GLOWING_MAP = new HashMap<>();
+public final class SelectiveGlowing {
     private static final TrackedData<Byte> FLAGS = getByteTrackedData();
+    private static final int ENTITY_STATE_INDEX = 0;
     private static MinecraftServer minecraftServer = null;
 
     public static final String MOD_ID = "selectiveglowing";
     public static String VERSION = "unknown";
+    public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+    private static Path configFile;
+    private static SelectiveGlowingConfig config;
+    private static Path stateFile;
+    private static SelectiveGlowingState state;
+
+    private final static Gson GSON = new Gson();
+
+
+    private SelectiveGlowing() { }
 
     /**
-     * Runs the mod initializer.
+     * Runs the mod logic initializer.
      */
-    @Override
-    public void onInitialize() {
+    public static void init() {
         VERSION = FabricLoader.getInstance().getModContainer(MOD_ID)
                 .map(c -> c.getMetadata().getVersion().getFriendlyString())
                 .orElse("unknown");
-        
+
+        var configDir = FabricLoader.getInstance().getConfigDir().resolve(MOD_ID);
+        configFile = configDir.resolve(MOD_ID + ".json");
+        stateFile = configDir.resolve("state.json");
+
+        LOGGER.info("Config path: {}", configDir);
+
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             minecraftServer = server;
+
+            loadConfig();
+            loadState();
         });
 
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> dispatcher.register(literal("glow")
-                .requires(source -> source.hasPermissionLevel(2))
-                .executes(context -> {
-                    context.getSource().sendFeedback(() -> 
-                            Text.empty()
-                                    .withColor(0xffadfa)
-                                    .append(
-                                            Text.literal("Selective Glowing ver. %s".formatted(VERSION))
-                                                    .formatted(Formatting.BOLD)
-                                    )
-                                    .append(
-                                            Text.literal("\nUsage:\n")
-                                                    .formatted(Formatting.ITALIC)
-                                    )
-                                    .append(
-                                            Text.literal(
-                                                    "/glow <targets: entities> <displayplayers: players>\n" +
-                                                    "/glow <targets: entities> *reset\n" +
-                                                    "/glow *reset"
-                                            )
-                                    ),
-                            false);  
-                    
-                    return Command.SINGLE_SUCCESS;
-                })
-                .then(argument("targets", EntityArgumentType.entities())
-                        .then(argument("displayplayers", EntityArgumentType.players())
-                                .executes(context -> {
-                                    var targets = EntityArgumentType.getEntities(context, "targets");
-                                    var displayPlayers = EntityArgumentType.getPlayers(context, "displayplayers");
-                                    for (Entity target : targets) {
-                                        GLOWING_MAP.put(target.getId(), displayPlayers.stream().map(Entity::getId).toList());
-                                        updateMetadata(target);
-                                    }
-                                    context.getSource().sendFeedback(() -> Text.literal(String.format("%d entities are now glowing for %d player(s).",
-                                            targets.size(), displayPlayers.size())), false);
-                                    return Command.SINGLE_SUCCESS;
-                                }))
-                        .then(literal("*reset")
-                                .executes(context -> {
-                                    var targets = EntityArgumentType.getEntities(context, "targets");
-                                    for (Entity target : targets) {
-                                        GLOWING_MAP.remove(target.getId());
-                                        updateMetadata(target);
-                                    }
-                                    context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for %d entities.", targets.size())), false);
-                                    return Command.SINGLE_SUCCESS;
-                                })))
-                .then(literal("*reset")
-                        .executes(context -> {
-                            var targetIds = new ArrayList<>(GLOWING_MAP.keySet());
-                            GLOWING_MAP.clear();
-                            if (minecraftServer != null) {
-                                for (ServerWorld world : minecraftServer.getWorlds()) {
-                                    for (Entity entity : world.iterateEntities()) {
-                                        if (!targetIds.contains(entity.getId())) continue;
-                                        updateMetadata(entity);
-                                    }
-                                }
-                            }
-                            context.getSource().sendFeedback(() -> Text.literal(String.format("Removed glowing overrides for all %d entities.", targetIds.size())), false);
-                            return Command.SINGLE_SUCCESS;
-                        }))));
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            // we don't really need to save the config *right now* as you can't edit it yet
+            saveState();
+        });
+    }
+
+    private static void loadConfig() {
+        try {
+            if (!Files.exists(configFile)) {
+                createDefaultConfig();
+                return;
+            }
+
+            var json = GSON.fromJson(Files.readString(configFile), JsonElement.class);
+            config = SelectiveGlowingConfig.CODEC.parse(JsonOps.INSTANCE, json)
+                    .getOrThrow();
+        } catch (Exception e) {
+            LOGGER.error("Failed to load config (using defaults): {}", e.toString());
+            createDefaultConfig();
+        }
+    }
+
+    private static void createDefaultConfig() {
+        config = new SelectiveGlowingConfig(true, true);
+        LOGGER.info("Created new default config");
+        saveConfig();
+    }
+
+    private static void saveConfig() {
+        try {
+            var json = SelectiveGlowingConfig.CODEC.encodeStart(JsonOps.INSTANCE, config).getOrThrow();
+            var parentDir = configFile.getParent();
+            if (parentDir != null) Files.createDirectories(parentDir);
+            Files.writeString(configFile, GSON.toJson(json),
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            LOGGER.error("Failed to save config: {}", e.toString());
+        }
+    }
+
+    private static void loadState() {
+        if (!config.isLoadState()) return;
+
+        try {
+            if (!Files.exists(stateFile)) {
+                createDefaultState();
+                return;
+            }
+
+            var json = GSON.fromJson(Files.readString(stateFile), JsonElement.class);
+            state = SelectiveGlowingState.CODEC.parse(JsonOps.INSTANCE, json)
+                    .getOrThrow();
+
+            LOGGER.info("State had {} entries:", state.getState().size());
+            state.getState().forEach((uuid, uuids) -> {
+                LOGGER.info("{} -> {}", uuid.toString(), String.join(", ", uuids.stream().map(UUID::toString).collect(Collectors.toSet())));
+            });
+        } catch (Exception e) {
+            LOGGER.error("Failed to load state: {}", e.toString());
+            createDefaultState();
+        }
+    }
+
+    private static void createDefaultState() {
+        state = new SelectiveGlowingState(new HashMap<>());
+        LOGGER.info("Created new default state");
+        saveState();
+    }
+
+    private static void saveState() {
+        if (!config.isSaveState()) return;
+
+        try {
+            var json = SelectiveGlowingState.CODEC.encodeStart(JsonOps.INSTANCE, state).getOrThrow();
+            Files.writeString(stateFile, GSON.toJson(json),
+                    StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            LOGGER.error("Failed to save state: {}", e.toString());
+        }
+    }
+
+    public static MinecraftServer getMinecraftServer() {
+        return minecraftServer;
+    }
+
+    public static TrackedData<Byte> getFlagsTrackedData() {
+        return FLAGS;
+    }
+
+    public static void setGlowing(Entity target, Collection<ServerPlayerEntity> displayPlayers) {
+        state.getState().put(target.getUuid(), displayPlayers.stream().map(Entity::getUuid).collect(Collectors.toSet()));
+        updateMetadata(target);
+    }
+
+    public static void resetGlowing(Entity target) {
+        state.getState().remove(target.getUuid());
+        updateMetadata(target);
+    }
+
+    public static Set<UUID> resetAllGlowing() {
+        var targetUuids = new HashSet<>(state.getState().keySet());
+        state.getState().clear();
+        return targetUuids;
     }
 
     @SuppressWarnings({"CallToPrintStackTrace"})
-    private static void updateMetadata(Entity target) {
+    public static void updateMetadata(Entity target) {
         try {
             if (FLAGS == null) return;
             byte bitmask = target.getDataTracker().get(FLAGS);
@@ -123,7 +179,7 @@ public class SelectiveGlowing implements ModInitializer {
                 if (player instanceof ServerPlayerEntity serverPlayer) {
                     List<DataTracker.SerializedEntry<?>> list = new ArrayList<>();
 
-                    if (isGlowing(target.getId(), serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
+                    if (isGlowing(target, serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
                     else bitmask = EntityData.GLOWING.unsetBit(bitmask);
 
                     list.add(new DataTracker.SerializedEntry<>(0, FLAGS.dataType(), bitmask));
@@ -158,31 +214,29 @@ public class SelectiveGlowing implements ModInitializer {
         }
     }
 
-    public static boolean isGlowing(int targetId, ServerPlayerEntity observer) {
-        if (isGlowing(targetId, observer.getId())) return true;
-        var target = getPlayerById(observer.getEntityWorld(), targetId);
+    public static boolean isGlowing(int targetId, Entity observer) {
+        var target = observer.getEntityWorld().getEntityById(targetId);
         if (target == null) return false;
-        return target.isGlowing();
+
+        return isGlowing(target, observer);
     }
 
-    public static boolean isGlowing(int targetId, int observerId) {
-        if (!GLOWING_MAP.containsKey(targetId)) return false;
-        return GLOWING_MAP.get(targetId).contains(observerId);
-    }
-
-    public static ServerPlayerEntity getPlayerById(ServerWorld world, int id) {
-        return world.getPlayers().stream().filter(p -> p.getId() == id).findFirst().orElse(null);
+    public static boolean isGlowing(Entity target, Entity observer) {
+        if (!state.getState().containsKey(target.getUuid())) return false;
+        return state.getState().get(target.getUuid()).contains(observer.getUuid());
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    public static EntityTrackerUpdateS2CPacket cloneAndOverridePacket(EntityTrackerUpdateS2CPacket packet, int observerId) {
+    public static EntityTrackerUpdateS2CPacket cloneAndOverridePacket(EntityTrackerUpdateS2CPacket packet, ServerPlayerEntity observer) {
         int targetId = packet.id();
         var trackedValues = new ArrayList<DataTracker.SerializedEntry<?>>();
         for (var value : packet.trackedValues()) {
-            if (value.id() == 0) {
+            if (value.id() == ENTITY_STATE_INDEX) {
                 byte bitmask = (byte) value.value();
-                if (SelectiveGlowing.isGlowing(targetId, observerId)) bitmask = EntityData.GLOWING.setBit(bitmask);
-                var newEntry = new DataTracker.SerializedEntry(0, value.handler(), bitmask);
+                if (SelectiveGlowing.isGlowing(targetId, observer)) {
+                    bitmask = EntityData.GLOWING.setBit(bitmask);
+                }
+                var newEntry = new DataTracker.SerializedEntry(ENTITY_STATE_INDEX, value.handler(), bitmask);
                 trackedValues.add(newEntry);
                 continue;
             }

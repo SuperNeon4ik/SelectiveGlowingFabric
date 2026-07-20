@@ -18,7 +18,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "me.superneon4ik.selectiveglowing.SelectiveGlowing"
+      "me.superneon4ik.selectiveglowing.SelectiveGlowingMod"
     ]
   },
   "mixins": [

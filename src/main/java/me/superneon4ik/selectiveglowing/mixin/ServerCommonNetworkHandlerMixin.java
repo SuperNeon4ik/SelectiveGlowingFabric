@@ -28,26 +28,29 @@ public abstract class ServerCommonNetworkHandlerMixin {
             method = "send",
             cancellable = true)
     private void sendPacket(Packet<?> packet, @Nullable ChannelFutureListener channelFutureListener, CallbackInfo ci) {
-        if (((ServerCommonNetworkHandler)(Object)this) instanceof ServerPlayNetworkHandler spnh) {
-            int observerId = spnh.player.getId(); // i hope it doesn't break lmfao
-            if (packet instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
-                packet = SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observerId);
-            } else if (packet instanceof BundleS2CPacket bundlePacket) {
-                var packets = bundlePacket.getPackets();
-                var newPackets = new ArrayList<Packet<? super ClientPlayPacketListener>>();
-                for (Packet<? super ClientPlayPacketListener> oldPacket : packets) {
-                    if (oldPacket instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
-                        newPackets.add(SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observerId));
-                        continue;
-                    }
-                    newPackets.add(oldPacket);
-                }
+        if (!(((ServerCommonNetworkHandler) (Object) this) instanceof ServerPlayNetworkHandler networkHandler))
+            return;
 
-                packet = new BundleS2CPacket(newPackets);
+        var observer = networkHandler.player;
+
+        if (packet instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
+            packet = SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observer);
+        }
+        else if (packet instanceof BundleS2CPacket bundlePacket) {
+            var packets = bundlePacket.getPackets();
+            var newPackets = new ArrayList<Packet<? super ClientPlayPacketListener>>();
+            for (Packet<? super ClientPlayPacketListener> oldPacket : packets) {
+                if (oldPacket instanceof EntityTrackerUpdateS2CPacket entityTrackerUpdatePacket) {
+                    newPackets.add(SelectiveGlowing.cloneAndOverridePacket(entityTrackerUpdatePacket, observer));
+                    continue;
+                }
+                newPackets.add(oldPacket);
             }
 
-            connection.send(packet, channelFutureListener);
-            ci.cancel();
+            packet = new BundleS2CPacket(newPackets);
         }
+
+        connection.send(packet, channelFutureListener);
+        ci.cancel();
     }
 }
