@@ -6,7 +6,9 @@
   "mixins": [
     "EntityAccessor",
     "ServerCommonPacketListenerImplMixin",
-    "ServerEntityMixin"
+    "ServerEntityMixin",
+    "SynchedEntityDataMixin",
+    "TrackedEntityAccessor"
   ],
   "injectors": {
     "defaultRequire": 1

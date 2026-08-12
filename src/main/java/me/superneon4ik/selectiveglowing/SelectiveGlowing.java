@@ -6,16 +6,21 @@ import com.mojang.serialization.JsonOps;
 import me.superneon4ik.selectiveglowing.config.SelectiveGlowingConfig;
 import me.superneon4ik.selectiveglowing.config.SelectiveGlowingState;
 import me.superneon4ik.selectiveglowing.enums.EntityData;
+import me.superneon4ik.selectiveglowing.extensions.ServerEntityExtension;
 import me.superneon4ik.selectiveglowing.mixin.EntityAccessor;
+import me.superneon4ik.selectiveglowing.mixin.TrackedEntityAccessor;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.mixin.networking.accessor.ChunkMapAccessor;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.network.protocol.game.ClientboundSetEntityDataPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerEntity;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +32,6 @@ import java.util.stream.Collectors;
 
 public final class SelectiveGlowing {
     private static final EntityDataAccessor<Byte> FLAGS = EntityAccessor.getDATA_SHARED_FLAGS_ID();
-    private static final int ENTITY_STATE_INDEX = 0;
     private static MinecraftServer minecraftServer = null;
 
     public static final String MOD_ID = "selectiveglowing";
@@ -65,7 +69,7 @@ public final class SelectiveGlowing {
             loadState();
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+        ServerLifecycleEvents.SERVER_STOPPING.register(_ -> {
             // we don't really need to save the config *right now* as you can't edit it yet
             saveState();
         });
@@ -118,10 +122,7 @@ public final class SelectiveGlowing {
             state = SelectiveGlowingState.CODEC.parse(JsonOps.INSTANCE, json)
                     .getOrThrow();
 
-            LOGGER.info("State had {} entries:", state.getState().size());
-            state.getState().forEach((uuid, uuids) -> {
-                LOGGER.info("{} -> {}", uuid.toString(), String.join(", ", uuids.stream().map(UUID::toString).collect(Collectors.toSet())));
-            });
+            LOGGER.info("State had {} entries.", state.getState().size());
         } catch (Exception e) {
             LOGGER.error("Failed to load state: {}", e.toString());
             createDefaultState();
@@ -170,48 +171,9 @@ public final class SelectiveGlowing {
         return targetUuids;
     }
 
-    @SuppressWarnings({"CallToPrintStackTrace"})
-    public static void updateMetadata(Entity target) {
-        try {
-            if (FLAGS == null) return;
-            byte bitmask = target.getEntityData().get(FLAGS);
-
-            try (var level = target.level()) {
-                for (Player player : level.players()) {
-                    if (player instanceof ServerPlayer serverPlayer) {
-                        List<SynchedEntityData.DataValue<?>> list = new ArrayList<>();
-
-                        if (isGlowing(target, serverPlayer)) bitmask = EntityData.GLOWING.setBit(bitmask);
-                        else bitmask = EntityData.GLOWING.unsetBit(bitmask);
-
-                        list.add(new SynchedEntityData.DataValue<>(0, FLAGS.serializer(), bitmask));
-                        var packet = new ClientboundSetEntityDataPacket(target.getId(), list);
-                        if (serverPlayer.distanceTo(target) <= 60) {
-                            serverPlayer.connection.send(packet);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    @SuppressWarnings({"unchecked"})
-    private static EntityDataAccessor<Byte> getByteTrackedData() {
-        var entityClass = Entity.class;
-        try {
-            var field = entityClass.getDeclaredField("DATA_SHARED_FLAGS_ID");
-            field.setAccessible(true);
-            return (EntityDataAccessor<Byte>) field.get(null);
-        } catch (IllegalAccessException | NoSuchFieldException ignore) {
-            return null;
-        }
-    }
-
     public static boolean isGlowing(int targetId, Entity observer) {
-        try (var level = observer.level()) {
-            var target = level.getEntity(targetId);
+        try {
+            var target = observer.level().getEntity(targetId);
             if (target == null) return false;
 
             return isGlowing(target, observer);
@@ -231,17 +193,34 @@ public final class SelectiveGlowing {
         int targetId = packet.id();
         var trackedValues = new ArrayList<SynchedEntityData.DataValue<?>>();
         for (var value : packet.packedItems()) {
-            if (value.id() == ENTITY_STATE_INDEX) {
+            if (value.id() == FLAGS.id()) {
                 byte bitmask = (byte) value.value();
+
                 if (SelectiveGlowing.isGlowing(targetId, observer)) {
                     bitmask = EntityData.GLOWING.setBit(bitmask);
                 }
-                var newEntry = new SynchedEntityData.DataValue(ENTITY_STATE_INDEX, value.serializer(), bitmask);
+
+                var newEntry = new SynchedEntityData.DataValue(FLAGS.id(), value.serializer(), bitmask);
                 trackedValues.add(newEntry);
                 continue;
             }
             trackedValues.add(value);
         }
         return new ClientboundSetEntityDataPacket(targetId, trackedValues);
+    }
+
+    @SuppressWarnings("UnstableApiUsage")
+    public static @Nullable ServerEntity getServerEntity(Entity entity) {
+        if (!(entity.level() instanceof ServerLevel level)) return null;
+        var chunkMap = level.getChunkSource().chunkMap;
+        var tracked = ((ChunkMapAccessor) chunkMap).getEntityMap().get(entity.getId());
+        // entities that aren't tracked yet (or anymore) have no ServerEntity to sync through
+        return tracked instanceof TrackedEntityAccessor accessor ? accessor.getServerEntity() : null;
+    }
+
+    public static void updateMetadata(Entity entity) {
+        var serverEntity = getServerEntity(entity);
+        if (serverEntity == null) return;
+        ((ServerEntityExtension) serverEntity).selectiveglowing$sendAllEntityData();
     }
 }
